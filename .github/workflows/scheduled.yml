@@ -1,0 +1,39 @@
+name: scheduled
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  issues: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bali2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe
+        id: probe
+        env:
+          CONFIG: ${{ secrets.CONFIG }}
+        run: python3 main.py
+      - name: Flag
+        if: steps.probe.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          for index in $(jq -r '.[]' hits.json); do
+            title="Item $index requires attention"
+            existing=$(gh issue list --state open --limit 100 --json title \
+                        | jq --arg t "$title" '[.[] | select(.title == $t)] | length')
+            if [ "$existing" != "0" ]; then
+              echo "[$index] already open"
+              continue
+            fi
+            gh issue create --title "$title" --assignee "$OWNER" \
+              --body "The scheduled check flagged item $index. Close this issue to reset it."
+          done
