@@ -1,11 +1,20 @@
 name: scheduled
+
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    # Offset minutes. GitHub drops scheduled runs that land on congested
+    # minutes, and :00 :15 :30 :45 are the busiest slots on the shared queue.
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch: {}
+
 permissions:
   contents: read
   issues: write
+
+concurrency:
+  group: scheduled
+  cancel-in-progress: false
+
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -13,12 +22,14 @@ jobs:
       run:
         working-directory: bali2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+
       - name: Probe
         id: probe
         env:
           CONFIG: ${{ secrets.CONFIG }}
         run: python3 main.py
+
       - name: Flag
         if: steps.probe.outputs.found == 'true'
         env:
@@ -28,12 +39,15 @@ jobs:
           set -euo pipefail
           for index in $(jq -r '.[]' hits.json); do
             title="Item $index requires attention"
+
             existing=$(gh issue list --state open --limit 100 --json title \
                         | jq --arg t "$title" '[.[] | select(.title == $t)] | length')
             if [ "$existing" != "0" ]; then
               echo "[$index] already open"
               continue
             fi
+
             gh issue create --title "$title" --assignee "$OWNER" \
               --body "The scheduled check flagged item $index. Close this issue to reset it."
+            echo "[$index] flagged"
           done
