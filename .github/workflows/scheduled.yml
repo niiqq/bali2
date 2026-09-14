@@ -2,9 +2,9 @@ name: scheduled
 
 on:
   schedule:
-    # Hourly, at minute 7. GitHub drops scheduled runs that land on
-    # congested minutes, and :00 is the busiest slot on the shared queue.
-    - cron: "7 * * * *"
+    # Every 30 minutes, on offset minutes. GitHub drops scheduled runs that
+    # land on congested minutes, and :00 and :30 are the busiest slots.
+    - cron: "7,37 * * * *"
   workflow_dispatch: {}
 
 permissions:
