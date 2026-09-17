@@ -15,7 +15,9 @@ that point is itself the list. Examples:
     "[].active"       ->  [{"active": true}]
     "data.item.flag"  ->  {"data": {"item": {"flag": true}}}
 
-An entry is a hit when any value the path resolves to is true.
+An entry is a hit when any value the path resolves to is true. A path that
+resolves to nothing is treated as a failure, not as a quiet "not yet" — it means
+the response no longer has the shape the entry expects.
 
 Entries are referenced by position only. No entry value is ever written to
 stdout or to the output file.
@@ -68,6 +70,14 @@ def is_hit(data, flag_path: str) -> bool:
     return any(bool(v) for v in resolve(data, flag_path.split(".")))
 
 
+def read_flag(data, flag_path: str):
+    """True, False, or None when the path reaches no value at all."""
+    values = resolve(data, flag_path.split("."))
+    if not values:
+        return None
+    return any(bool(v) for v in values)
+
+
 def reason(error) -> str:
     """A short error label that cannot contain the endpoint value."""
     if isinstance(error, urllib.error.HTTPError):
@@ -107,7 +117,11 @@ def main() -> int:
             print("[{}] error: {}".format(index, reason(error)))
             continue
 
-        if is_hit(data, entry["f"]):
+        flag = read_flag(data, entry["f"])
+        if flag is None:
+            failures += 1
+            print("[{}] error: path matched nothing".format(index))
+        elif flag:
             hits.append(index)
             print("[{}] hit".format(index))
         else:
